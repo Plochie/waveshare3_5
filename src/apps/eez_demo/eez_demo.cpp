@@ -10,6 +10,7 @@
 #include "apps/i2c_spi_scanner/i2c_spi_scanner.h"
 #include "apps/serial_monitor/serial_monitor.h"
 #include "apps/wled/wled.h"
+#include "apps/deck/deck.h"
 
 static void open_wifi_manager_cb(lv_event_t *e)
 {
@@ -53,6 +54,12 @@ static void open_wled_cb(lv_event_t *e)
   screen_manager::push(wled_create());
 }
 
+static void open_deck_cb(lv_event_t *e)
+{
+  LV_UNUSED(e);
+  screen_manager::push(deck_create());
+}
+
 static lv_obj_t *create_nav_button(lv_obj_t *parent, const char *text, int y, lv_event_cb_t cb)
 {
   lv_obj_t *btn = lv_button_create(parent);
@@ -85,6 +92,7 @@ lv_obj_t *eez_demo_create()
   create_nav_button(objects.main, "I2C/SPI Scanner", 290, open_i2c_spi_scanner_cb);
   create_nav_button(objects.main, "Serial Monitor", 350, open_serial_monitor_cb);
   create_nav_button(objects.main, "WLED", 410, open_wled_cb);
+  create_nav_button(objects.main, "Deck", 470, open_deck_cb);
 
   return objects.main;
 }

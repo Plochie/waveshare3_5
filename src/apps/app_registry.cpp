@@ -7,6 +7,7 @@
 #include "apps/i2c_spi_scanner/i2c_spi_scanner.h"
 #include "apps/serial_monitor/serial_monitor.h"
 #include "apps/wled/wled.h"
+#include "apps/deck/deck.h"
 
 namespace app_registry {
 
@@ -23,6 +24,7 @@ static const app_descriptor_t apps[] = {
     {"I2C/SPI Scanner", "", app_category::instruments, i2c_spi_scanner_create},
     {"Serial Monitor", "", app_category::debug, serial_monitor_create},
     {"WLED", "", app_category::network, wled_create},
+    {"Deck", "", app_category::network, deck_create},
 };
 
 const app_descriptor_t *all(size_t &count)
