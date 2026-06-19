@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "grid": { "cols": 3, "rows": 4 },
+  "ha": { "base_url": "http://homeassistant.local:8123", "token": "REPLACE_WITH_LONG_LIVED_TOKEN" },
+  "pages": [
+    {
+      "id": "home",
+      "title": "Home",
+      "buttons": [
+        { "pos": 0, "label": "HA Webhook", "color": "#3ECF8E",
+          "steps": [ { "type": "ha_webhook", "id": "deck_test" } ] },
+        { "pos": 1, "label": "Toggle Light", "color": "#60A5FA",
+          "steps": [ { "type": "ha_service", "domain": "light", "service": "toggle",
+                       "data": { "entity_id": "light.office" } } ] },
+        { "pos": 2, "label": "Ping Server", "color": "#F59E0B",
+          "steps": [ { "type": "http_request", "method": "POST",
+                       "url": "http://192.168.1.50:8080/deck/ping",
+                       "body": "{\"from\":\"deck\"}" } ] },
+        { "pos": 3, "label": "Combo", "color": "#A78BFA",
+          "steps": [ { "type": "ha_webhook", "id": "deck_test" },
+                     { "type": "delay", "ms": 500 },
+                     { "type": "http_request", "method": "GET",
+                       "url": "http://192.168.1.50:8080/deck/after" } ] },
+        { "pos": 5, "label": "Work", "color": "#2A2A2E", "open_page": "work" }
+      ]
+    },
+    {
+      "id": "work",
+      "title": "Work",
+      "buttons": [
+        { "pos": 0, "label": "Build", "color": "#F87171",
+          "steps": [ { "type": "http_request", "method": "POST",
+                       "url": "http://192.168.1.50:8080/ci/build" } ] }
+      ]
+    }
+  ]
+}
