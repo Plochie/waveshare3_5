@@ -1,5 +1,12 @@
 import { DeckConfig } from "../types";
 
+function randomToken(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
 interface Props {
   config: DeckConfig;
   onChange: (next: DeckConfig) => void;
@@ -65,11 +72,16 @@ export default function TopBar({ config, onChange, onSave, dirty, saving, config
 
         <label>
           Agent pairing token
-          <input
-            value={config.agent?.token ?? ""}
-            onChange={(e) => onChange({ ...config, agent: { token: e.target.value } })}
-            placeholder="8-char-pairing-secret"
-          />
+          <span className="token-row">
+            <input
+              value={config.agent?.token ?? ""}
+              onChange={(e) => onChange({ ...config, agent: { token: e.target.value } })}
+              placeholder="8-char-pairing-secret"
+            />
+            <button type="button" onClick={() => onChange({ ...config, agent: { token: randomToken() } })}>
+              Generate
+            </button>
+          </span>
         </label>
       </div>
 

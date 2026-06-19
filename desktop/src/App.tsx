@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { configPath as fetchConfigPath, loadConfig, saveConfig } from "./api";
 import "./App.css";
 import ButtonEditor from "./components/ButtonEditor";
+import DevicesPanel from "./components/DevicesPanel";
 import GridView from "./components/GridView";
 import PageTabs from "./components/PageTabs";
 import TopBar from "./components/TopBar";
@@ -115,6 +116,8 @@ export default function App() {
         saving={saving}
         configPath={path}
       />
+
+      <DevicesPanel />
 
       <PageTabs
         pages={cfg.pages}

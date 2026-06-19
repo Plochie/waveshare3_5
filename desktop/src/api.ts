@@ -1,6 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { DeckConfig, emptyConfig } from "./types";
 
+export interface DeviceInfo {
+  conn_id: number;
+  device_id: string;
+  fw: string;
+  authed: boolean;
+}
+
 // Wraps the Rust-side commands in src-tauri/src/lib.rs. The config lives at a
 // fixed file (deck-config.json) in the app's data dir - no file picker yet,
 // matching the "single config the app owns" model from the protocol spec.
@@ -17,4 +24,8 @@ export async function saveConfig(cfg: DeckConfig): Promise<void> {
 
 export async function configPath(): Promise<string> {
   return invoke<string>("config_path_string");
+}
+
+export async function listDevices(): Promise<DeviceInfo[]> {
+  return invoke<DeviceInfo[]>("list_devices");
 }

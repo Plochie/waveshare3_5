@@ -144,6 +144,53 @@ label {
   color: #3ecf8e;
 }
 
+.token-row {
+  display: flex;
+  gap: 0.4em;
+}
+
+.token-row input {
+  flex: 1;
+}
+
+.devices-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.4em 1em;
+  border-bottom: 1px solid #2e2e33;
+  font-size: 0.8em;
+}
+
+.devices-label {
+  color: #777;
+  text-transform: uppercase;
+  font-size: 0.75em;
+  letter-spacing: 0.05em;
+}
+
+.devices-empty {
+  color: #555;
+}
+
+.device-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  background: #26262b;
+  border: 1px solid #3a3a40;
+  border-radius: 12px;
+  padding: 0.15em 0.6em;
+}
+
+.device-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3ecf8e;
+  display: inline-block;
+}
+
 .page-tabs {
   display: flex;
   gap: 0.5em;
