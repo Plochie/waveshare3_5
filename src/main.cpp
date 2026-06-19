@@ -16,8 +16,10 @@
 #include "core/screen_manager.h"
 #include "core/logging.h"
 #include "core/wifi_autoconnect.h"
+#include "core/deck_client.h"
 #include "core/display_power.h"
 #include "apps/eez_demo/eez_demo.h"
+#include "apps/deck/deck.h"
 
 #define DIRECT_RENDER_MODE // Uncomment to enable full frame buffer
 
@@ -170,6 +172,7 @@ void setup()
     display_power::init();
     screen_manager::push(eez_demo_create());
     wifi_autoconnect::start();
+    deck_client::start();
   }
 
   Serial.println("Setup done");
@@ -178,5 +181,10 @@ void setup()
 void loop()
 {
   lv_task_handler(); /* let the GUI do its work */
+  // Runs regardless of which screen is active, so a config pushed while the
+  // Deck app is closed still invalidates its cache for next time it's opened.
+  if (deck_client::consume_config_pushed() || deck_client::consume_icons_pushed()) {
+    deck_invalidate_config();
+  }
   delay(5);
 }

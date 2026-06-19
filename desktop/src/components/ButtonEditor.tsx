@@ -1,3 +1,6 @@
+import { open } from "@tauri-apps/plugin-dialog";
+import { useEffect, useState } from "react";
+import { iconPreview, importIcon } from "../api";
 import { DeckButton, DeckPage } from "../types";
 import StepEditor from "./StepEditor";
 
@@ -11,6 +14,36 @@ interface Props {
 
 export default function ButtonEditor({ button, pages, currentPageId, onChange, onClear }: Props) {
   const isFolder = !!button.open_page;
+  const [preview, setPreview] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    setPreview(null);
+    if (!button.icon) return;
+    let cancelled = false;
+    iconPreview(button.icon).then((p) => {
+      if (!cancelled) setPreview(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [button.icon]);
+
+  async function handlePickIcon() {
+    const path = await open({
+      multiple: false,
+      filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "bmp", "gif"] }],
+    });
+    if (!path || typeof path !== "string") return;
+    setImporting(true);
+    try {
+      const meta = await importIcon(path);
+      setPreview(meta.preview);
+      onChange({ ...button, icon: meta.name });
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function setMode(folder: boolean) {
     if (folder) {
@@ -36,12 +69,22 @@ export default function ButtonEditor({ button, pages, currentPageId, onChange, o
       </label>
 
       <label>
-        Icon filename
-        <input
-          value={button.icon ?? ""}
-          onChange={(e) => onChange({ ...button, icon: e.target.value })}
-          placeholder="standup.bin (optional)"
-        />
+        Icon
+        <span className="icon-row">
+          {preview ? (
+            <img className="icon-thumb" src={preview} alt={button.icon} />
+          ) : (
+            <span className="icon-thumb icon-thumb-empty" />
+          )}
+          <button type="button" onClick={handlePickIcon} disabled={importing}>
+            {importing ? "Importing…" : button.icon ? "Replace…" : "Choose image…"}
+          </button>
+          {button.icon ? (
+            <button type="button" className="link-btn danger" onClick={() => onChange({ ...button, icon: undefined })}>
+              Remove
+            </button>
+          ) : null}
+        </span>
       </label>
 
       <label>

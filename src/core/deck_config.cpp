@@ -75,6 +75,7 @@ bool parse(const String &json, config &out)
   out.rows = doc["grid"]["rows"] | 4;
   out.ha_base_url = (const char *)(doc["ha"]["base_url"] | "");
   out.ha_token = (const char *)(doc["ha"]["token"] | "");
+  out.agent_token = (const char *)(doc["agent"]["token"] | "");
 
   for (JsonObjectConst p : doc["pages"].as<JsonArrayConst>()) {
     page pg;

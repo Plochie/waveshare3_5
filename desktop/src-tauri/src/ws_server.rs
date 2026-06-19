@@ -10,7 +10,7 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,6 +36,7 @@ struct Client {
     tx: mpsc::UnboundedSender<Message>,
     device_id: String,
     fw: String,
+    known_icons: HashSet<String>,
 }
 
 pub struct ServerState {
@@ -157,6 +158,7 @@ async fn handle_socket(socket: WebSocket, state: SharedState) {
             tx: tx.clone(),
             device_id: device_id.clone(),
             fw: fw.clone(),
+            known_icons: HashSet::new(),
         },
     );
     let _ = tx.send(Message::Text(json!({"t": "auth_ok"}).to_string()));
@@ -175,6 +177,14 @@ async fn handle_socket(socket: WebSocket, state: SharedState) {
                 let _ = state
                     .app
                     .emit("deck-have-icons", json!({ "conn_id": conn_id, "names": names }));
+                let known: HashSet<String> = names.into_iter().collect();
+                if let Some(c) = state.clients.lock().await.get_mut(&conn_id) {
+                    c.known_icons = known.clone();
+                }
+                let cfg = state.config.lock().await.clone();
+                if let Some(cfg) = cfg {
+                    push_missing_icons(&state.app, &tx, &known, &cfg);
+                }
             }
             Ok(InMsg::Result { id, ok, error }) => {
                 let _ = state.app.emit(
@@ -207,6 +217,29 @@ async fn expected_token(state: &SharedState) -> String {
         .and_then(|t| t.as_str())
         .unwrap_or("")
         .to_string()
+}
+
+// Sends icon_begin/binary/icon_end for every icon `config` references that
+// isn't already in `known` (protocol §3.3). Best-effort: failures to read an
+// icon file are silently skipped (the device just keeps showing label-only).
+fn push_missing_icons(
+    app: &AppHandle,
+    tx: &mpsc::UnboundedSender<Message>,
+    known: &HashSet<String>,
+    config: &Value,
+) {
+    for name in crate::icons::icons_referenced(config) {
+        if known.contains(&name) {
+            continue;
+        }
+        if let Some((w, h, bytes)) = crate::icons::read_icon(app, &name) {
+            let _ = tx.send(Message::Text(
+                json!({"t": "icon_begin", "name": name, "bytes": bytes.len(), "w": w, "h": h}).to_string(),
+            ));
+            let _ = tx.send(Message::Binary(bytes));
+            let _ = tx.send(Message::Text(json!({"t": "icon_end", "name": name}).to_string()));
+        }
+    }
 }
 
 async fn push_config_to(tx: &mpsc::UnboundedSender<Message>, state: &SharedState) {
@@ -242,6 +275,7 @@ pub async fn broadcast_config(state: &SharedState, config: Value) {
     let clients = state.clients.lock().await;
     for c in clients.values() {
         let _ = c.tx.send(Message::Text(msg.clone()));
+        push_missing_icons(&state.app, &c.tx, &c.known_icons, &config);
     }
 }
 

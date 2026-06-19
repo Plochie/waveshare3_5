@@ -29,3 +29,22 @@ export async function configPath(): Promise<string> {
 export async function listDevices(): Promise<DeviceInfo[]> {
   return invoke<DeviceInfo[]>("list_devices");
 }
+
+export interface IconMeta {
+  name: string;
+  w: number;
+  h: number;
+  preview: string; // data: URL, ready to drop into an <img src>
+}
+
+// Resizes/converts the PNG at `path` to RGB565 and stores it under the app's
+// icons dir; returns the stored filename (for DeckButton.icon) + a preview.
+export async function importIcon(path: string): Promise<IconMeta> {
+  return invoke<IconMeta>("import_icon", { path });
+}
+
+// Re-renders a stored icon back to a PNG data URL for display, or null if
+// `name` isn't a known icon (e.g. referenced but never imported on this machine).
+export async function iconPreview(name: string): Promise<string | null> {
+  return invoke<string | null>("icon_preview", { name });
+}

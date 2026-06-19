@@ -1,3 +1,4 @@
+mod icons;
 mod mdns;
 mod ws_server;
 
@@ -51,6 +52,7 @@ fn config_path_string(app: tauri::AppHandle) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let state: SharedState = std::sync::Arc::new(ws_server::ServerState::new(handle.clone()));
@@ -68,7 +70,9 @@ pub fn run() {
             load_config,
             save_config,
             config_path_string,
-            ws_server::list_devices
+            ws_server::list_devices,
+            icons::import_icon,
+            icons::icon_preview
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

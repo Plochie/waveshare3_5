@@ -2,8 +2,10 @@
 
 #include <vector>
 
+#include "core/deck_client.h"
 #include "core/deck_config.h"
 #include "core/deck_executor.h"
+#include "core/deck_icons.h"
 #include "core/screen_manager.h"
 #include "ui/styles.h"
 
@@ -33,6 +35,78 @@ static lv_color_t tile_color(const String &hex)
 
 // Forward decl.
 static void rebuild_grid();
+
+// Frees the PSRAM pixel buffer + heap-allocated lv_image_dsc_t stashed as an
+// lv_image's user_data when that image (and thus the tile/grid it belonged
+// to) is destroyed — otherwise every rebuild_grid()/lv_obj_clean(s_grid) call
+// would leak one icon's worth of PSRAM.
+static void icon_delete_cb(lv_event_t *e)
+{
+  lv_image_dsc_t *dsc = (lv_image_dsc_t *)lv_event_get_user_data(e);
+  if (!dsc) return;
+  free((void *)dsc->data);
+  free(dsc);
+}
+
+// Builds an lv_image showing btn.icon (RGB565 bytes loaded from SD into a
+// PSRAM buffer), scaled to fit within target_size, or returns nullptr if the
+// button has no icon or the icon isn't on SD yet (label-only tile).
+static lv_obj_t *make_icon(lv_obj_t *parent, const deck_config::button &btn,
+                           int target_size)
+{
+  if (btn.icon.isEmpty()) return nullptr;
+  int iw = 0, ih = 0;
+  if (!deck_icons::get_dims(btn.icon, iw, ih) || iw <= 0 || ih <= 0) return nullptr;
+
+  size_t len = 0;
+  uint8_t *pixels = deck_icons::load_pixels(btn.icon, len);
+  if (!pixels || len < (size_t)iw * ih * 2) {
+    if (pixels) free(pixels);
+    return nullptr;
+  }
+
+  lv_image_dsc_t *dsc = (lv_image_dsc_t *)malloc(sizeof(lv_image_dsc_t));
+  if (!dsc) {
+    free(pixels);
+    return nullptr;
+  }
+  memset(dsc, 0, sizeof(*dsc));
+  dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+  dsc->header.cf = LV_COLOR_FORMAT_RGB565;
+  dsc->header.w = iw;
+  dsc->header.h = ih;
+  dsc->header.stride = iw * 2;
+  dsc->data_size = len;
+  dsc->data = pixels;
+
+  lv_obj_t *img = lv_image_create(parent);
+  lv_image_set_src(img, dsc);
+  int max_src = LV_MAX(iw, ih);
+  uint32_t zoom = max_src > 0 ? (uint32_t)(256 * target_size / max_src) : 256;
+  lv_image_set_scale(img, zoom);
+  lv_obj_add_event_cb(img, icon_delete_cb, LV_EVENT_DELETE, dsc);
+  return img;
+}
+
+// Loads s_cfg from SD (if not already cached) and rebuilds the on-screen grid
+// to match. Shared by deck_create() and deck_invalidate_config().
+static void load_and_show()
+{
+  if (!s_loaded) {
+    if (deck_config::load(s_cfg)) {
+      s_loaded = true;
+    }
+  }
+  s_page_stack.clear();
+  s_page_stack.push_back("home");
+
+  if (!s_loaded || s_cfg.pages.empty()) {
+    lv_label_set_text(s_title, "Deck");
+    lv_label_set_text(s_status, "No /deck/config.json on SD");
+  } else {
+    rebuild_grid();
+  }
+}
 
 static void tile_click_cb(lv_event_t *e)
 {
@@ -75,13 +149,21 @@ static void make_tile(lv_obj_t *parent, const deck_config::button &btn, int idx,
   lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(tile, tile_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)idx);
 
+  int icon_size = LV_MIN(w, h) * 6 / 10;
+  lv_obj_t *icon = make_icon(tile, btn, icon_size);
+
   lv_obj_t *label = lv_label_create(tile);
   lv_label_set_text(label, btn.label.c_str());
   lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(label, w - 12);
   lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(label, styles::text_primary(), 0);
-  lv_obj_center(label);
+  if (icon) {
+    lv_obj_align(icon, LV_ALIGN_TOP_MID, 0, 4);
+    lv_obj_align(label, LV_ALIGN_BOTTOM_MID, 0, -2);
+  } else {
+    lv_obj_center(label);
+  }
 }
 
 static void rebuild_grid()
@@ -134,6 +216,9 @@ static void status_timer_cb(lv_timer_t *t)
     lv_label_set_text(s_status, st.message);
     lv_obj_set_style_text_color(s_status,
         st.ok ? styles::accent_green() : styles::accent_red(), 0);
+  } else {
+    lv_label_set_text(s_status, deck_client::connected() ? "Agent connected" : "Agent offline");
+    lv_obj_set_style_text_color(s_status, styles::text_muted(), 0);
   }
 }
 
@@ -144,6 +229,14 @@ static void screen_delete_cb(lv_event_t *e)
     lv_timer_delete(s_status_timer);
     s_status_timer = nullptr;
   }
+  // Pointers below are now dangling (lv_obj_delete() already ran on s_root's
+  // subtree) — null them so deck_invalidate_config() can safely no-op the UI
+  // half of its work if a config push arrives while the screen is closed.
+  s_root = nullptr;
+  s_title = nullptr;
+  s_status = nullptr;
+  s_grid = nullptr;
+  s_back = nullptr;
 }
 
 lv_obj_t *deck_create()
@@ -184,21 +277,18 @@ lv_obj_t *deck_create()
   lv_obj_set_style_text_color(s_status, styles::text_muted(), 0);
 
   // Load config once (kept in a static for re-entry).
-  if (!s_loaded) {
-    if (deck_config::load(s_cfg)) {
-      s_loaded = true;
-    }
-  }
-  s_page_stack.clear();
-  s_page_stack.push_back("home");
-
-  if (!s_loaded || s_cfg.pages.empty()) {
-    lv_label_set_text(s_title, "Deck");
-    lv_label_set_text(s_status, "No /deck/config.json on SD");
-  } else {
-    rebuild_grid();
-  }
+  load_and_show();
 
   s_status_timer = lv_timer_create(status_timer_cb, 200, NULL);
   return s_root;
+}
+
+void deck_invalidate_config()
+{
+  s_loaded = false;
+  if (s_root) {
+    // Screen is currently open — reload + rebuild now so the change is
+    // visible without requiring the user to leave and reopen the app.
+    load_and_show();
+  }
 }
