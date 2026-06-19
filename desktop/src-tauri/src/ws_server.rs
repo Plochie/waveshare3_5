@@ -80,6 +80,8 @@ enum InMsg {
         ok: bool,
         error: Option<String>,
     },
+    #[serde(rename = "exec")]
+    Exec { id: u64, step: Value },
     #[serde(other)]
     Unknown,
 }
@@ -191,6 +193,23 @@ async fn handle_socket(socket: WebSocket, state: SharedState) {
                     "deck-exec-result",
                     json!({ "conn_id": conn_id, "id": id, "ok": ok, "error": error }),
                 );
+            }
+            Ok(InMsg::Exec { id, step }) => {
+                // §3.4: device -> app. This connection already passed the
+                // hello/token check above, so it's implicitly authenticated -
+                // no extra gating needed before running the step. enigo +
+                // process spawning can block briefly, so run it off the
+                // async runtime's worker threads.
+                let tx2 = tx.clone();
+                tokio::task::spawn_blocking(move || {
+                    let msg = match crate::host_actions::execute_step(&step) {
+                        Ok(()) => json!({"t": "result", "id": id, "ok": true}).to_string(),
+                        Err(e) => {
+                            json!({"t": "result", "id": id, "ok": false, "error": e}).to_string()
+                        }
+                    };
+                    let _ = tx2.send(Message::Text(msg));
+                });
             }
             Ok(InMsg::Hello { .. }) | Ok(InMsg::Unknown) | Err(_) => {}
         }

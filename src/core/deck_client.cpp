@@ -23,6 +23,18 @@ static volatile bool s_config_pending = false;
 static volatile bool s_icons_pending = false;
 static String s_device_id;
 
+// Host-step (exec/result) round trip — see exec_host_step()/handle_result().
+static SemaphoreHandle_t s_exec_sem = nullptr;
+static volatile uint32_t s_pending_exec_id = 0;
+static volatile bool s_pending_ok = false;
+static char s_pending_err[64] = {0};
+
+static void set_pending_err(const char *msg)
+{
+  strncpy(s_pending_err, msg, sizeof(s_pending_err) - 1);
+  s_pending_err[sizeof(s_pending_err) - 1] = '\0';
+}
+
 static String make_device_id()
 {
   String mac = WiFi.macAddress(); // "AA:BB:CC:DD:EE:FF"
@@ -115,6 +127,18 @@ static void handle_icon_end(JsonDocument &doc)
   }
 }
 
+// Matches a `result` (protocol §3.4) against the exec currently awaited by
+// exec_host_step(), if any, and wakes it up. Runs on this task (the one
+// driving s_ws.loop()), exec_host_step() runs on deck_executor's task.
+static void handle_result(JsonDocument &doc)
+{
+  uint32_t id = doc["id"] | 0;
+  if (id == 0 || id != s_pending_exec_id) return; // stale or unexpected
+  s_pending_ok = doc["ok"] | false;
+  set_pending_err((const char *)(doc["error"] | ""));
+  if (s_exec_sem) xSemaphoreGive(s_exec_sem);
+}
+
 static void handle_config(JsonDocument &doc)
 {
   String json;
@@ -158,8 +182,10 @@ static void handle_message(const uint8_t *payload, size_t len)
     handle_icon_begin(doc);
   } else if (!strcmp(t, "icon_end")) {
     handle_icon_end(doc);
+  } else if (!strcmp(t, "result")) {
+    handle_result(doc);
   }
-  // exec/state: Phase 3/4 — ignored for forward-compat (per protocol §5).
+  // state: Phase 4 — ignored for forward-compat (per protocol §5).
 }
 
 static void on_event(WStype_t type, uint8_t *payload, size_t length)
@@ -173,6 +199,12 @@ static void on_event(WStype_t type, uint8_t *payload, size_t length)
     case WStype_DISCONNECTED:
       s_authed = false;
       LOG_W("deck_client", "disconnected from agent");
+      // Unblock any exec_host_step() wait — it'll never see its `result` now.
+      if (s_pending_exec_id != 0 && s_exec_sem) {
+        s_pending_ok = false;
+        set_pending_err("disconnected");
+        xSemaphoreGive(s_exec_sem);
+      }
       break;
     case WStype_TEXT:
       handle_message(payload, length);
@@ -222,6 +254,7 @@ void start()
   if (s_started) return;
   s_started = true;
   s_device_id = make_device_id();
+  s_exec_sem = xSemaphoreCreateBinary();
   xTaskCreate(client_task, "deck_client", 8192, NULL, 1, NULL);
 }
 
@@ -242,6 +275,35 @@ bool consume_icons_pushed()
   if (!s_icons_pending) return false;
   s_icons_pending = false;
   return true;
+}
+
+static uint32_t s_next_exec_id = 0;
+
+bool exec_host_step(const String &step_json, uint32_t timeout_ms, String &err)
+{
+  if (!s_authed || !s_ws.isConnected()) {
+    err = "not connected";
+    return false;
+  }
+
+  uint32_t id = ++s_next_exec_id;
+  if (id == 0) id = ++s_next_exec_id; // skip the sentinel "no exec" value
+  s_pending_exec_id = id;
+  xSemaphoreTake(s_exec_sem, 0); // drop any stale signal from a prior exec
+
+  String out = "{\"t\":\"exec\",\"id\":" + String(id) + ",\"step\":" + step_json + "}";
+  s_ws.sendTXT(out);
+
+  bool signaled = xSemaphoreTake(s_exec_sem, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+  s_pending_exec_id = 0;
+  if (!signaled) {
+    err = "timeout";
+    return false;
+  }
+  if (!s_pending_ok) {
+    err = s_pending_err[0] ? s_pending_err : "step failed";
+  }
+  return s_pending_ok;
 }
 
 } // namespace deck_client

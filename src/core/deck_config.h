@@ -13,8 +13,8 @@ enum class step_type {
   http_request,
   ha_service,
   ha_webhook,
-  mqtt_publish,   // parsed, not executed in phase 1
-  hotkey,         // host steps: parsed, skipped in phase 1
+  mqtt_publish,   // parsed, not executed (phase 4)
+  hotkey,         // host steps: run via the desktop agent (phase 3)
   type_text,
   launch_app,
   run_command,
@@ -42,6 +42,13 @@ struct step {
   // mqtt_publish (phase 4)
   String topic;
   String payload;
+
+  // host steps (phase 3): run on the desktop agent, not the device.
+  std::vector<String> keys;  // hotkey
+  String text;               // type_text
+  String target;             // launch_app
+  String command;            // run_command
+  String media_key;          // media_key: play_pause|next|prev|vol_up|vol_down|mute
 
   // delay
   uint32_t delay_ms = 0;

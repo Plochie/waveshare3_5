@@ -1,3 +1,4 @@
+mod host_actions;
 mod icons;
 mod mdns;
 mod ws_server;

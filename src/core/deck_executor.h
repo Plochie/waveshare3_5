@@ -2,10 +2,12 @@
 
 #include "core/deck_config.h"
 
-// Runs a button's step list on a background FreeRTOS task so blocking HTTP and
-// delay steps never stall LVGL. Phase 1 executes only direct-network steps
-// (http_request / ha_service / ha_webhook / delay); other step types are
-// logged and skipped.
+// Runs a button's step list on a background FreeRTOS task so blocking HTTP,
+// delay, and exec round-trips never stall LVGL. Direct-network steps
+// (http_request / ha_service / ha_webhook) run locally; host steps (hotkey /
+// type_text / launch_app / run_command / media_key) are sent to the desktop
+// agent over deck_client::exec_host_step() (protocol §3.4). Unknown step
+// types are logged and skipped.
 namespace deck_executor {
 
 struct status {

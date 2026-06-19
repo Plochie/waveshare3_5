@@ -52,11 +52,28 @@ static void parse_step(JsonObjectConst o, step &st)
       st.topic = (const char *)(o["topic"] | "");
       st.payload = (const char *)(o["payload"] | "");
       break;
+    case step_type::hotkey:
+      for (JsonVariantConst v : o["keys"].as<JsonArrayConst>()) {
+        st.keys.push_back(String((const char *)(v.as<const char *>())));
+      }
+      break;
+    case step_type::type_text:
+      st.text = (const char *)(o["text"] | "");
+      break;
+    case step_type::launch_app:
+      st.target = (const char *)(o["target"] | "");
+      break;
+    case step_type::run_command:
+      st.command = (const char *)(o["command"] | "");
+      break;
+    case step_type::media_key:
+      st.media_key = (const char *)(o["key"] | "");
+      break;
     case step_type::delay:
       st.delay_ms = (uint32_t)(o["ms"] | 0);
       break;
     default:
-      break; // host steps + unknown: nothing to extract in phase 1
+      break; // unknown: nothing to extract
   }
 }
 

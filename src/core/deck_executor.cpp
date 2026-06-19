@@ -1,14 +1,17 @@
 #include "core/deck_executor.h"
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
 
+#include "core/deck_client.h"
 #include "core/logging.h"
 
 namespace deck_executor {
 
 static constexpr uint16_t HTTP_TIMEOUT_MS = 3000;
+static constexpr uint32_t HOST_STEP_TIMEOUT_MS = 3000; // protocol §3.4/§4
 
 // Heap payload handed to the worker task (owns its own copies).
 struct job {
@@ -70,6 +73,56 @@ static bool do_http(const String &method, const String &url,
   return ok;
 }
 
+// Builds the protocol §3 step JSON for a host step (the wire shape, not
+// deck_config::step's parsed-field layout) to send as `exec`'s "step".
+static String host_step_json(const deck_config::step &st)
+{
+  using deck_config::step_type;
+  JsonDocument doc;
+  switch (st.type) {
+    case step_type::hotkey: {
+      doc["type"] = "hotkey";
+      JsonArray keys = doc["keys"].to<JsonArray>();
+      for (const String &k : st.keys) keys.add(k);
+      break;
+    }
+    case step_type::type_text:
+      doc["type"] = "type_text";
+      doc["text"] = st.text;
+      break;
+    case step_type::launch_app:
+      doc["type"] = "launch_app";
+      doc["target"] = st.target;
+      break;
+    case step_type::run_command:
+      doc["type"] = "run_command";
+      doc["command"] = st.command;
+      break;
+    case step_type::media_key:
+      doc["type"] = "media_key";
+      doc["key"] = st.media_key;
+      break;
+    default:
+      break;
+  }
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+// Sends a host step to the desktop agent over the exec/result WS exchange
+// and blocks (this runs on the executor's own worker task) for the result.
+static bool run_host_step(const deck_config::step &st)
+{
+  String err;
+  bool ok = deck_client::exec_host_step(host_step_json(st), HOST_STEP_TIMEOUT_MS, err);
+  if (!ok) {
+    LOG_W("deck", "host step failed: %s", err.c_str());
+    set_msg(err.length() ? err.c_str() : "host step failed");
+  }
+  return ok;
+}
+
 static bool run_step(const deck_config::step &st, const job &j)
 {
   using deck_config::step_type;
@@ -99,11 +152,17 @@ static bool run_step(const deck_config::step &st, const job &j)
       String url = j.ha_base_url + "/api/webhook/" + st.webhook_id;
       return do_http("POST", url, {}, "{}", "");
     }
+    case step_type::hotkey:
+    case step_type::type_text:
+    case step_type::launch_app:
+    case step_type::run_command:
+    case step_type::media_key:
+      return run_host_step(st);
     case step_type::delay:
       vTaskDelay(pdMS_TO_TICKS(st.delay_ms));
       return true;
     default:
-      LOG_I("deck", "skipping host/unsupported step (phase 1)");
+      LOG_I("deck", "skipping unsupported step type");
       return true; // skipped steps are not failures
   }
 }
