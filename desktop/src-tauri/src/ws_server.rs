@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::net::TcpListener;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 // Implements the device-facing side of
 // docs/superpowers/specs/2026-06-19-wifi-streamdeck-protocol.md §3: this app
@@ -26,10 +26,10 @@ use tokio::sync::{mpsc, Mutex};
 
 #[derive(Clone, Serialize)]
 pub struct DeviceInfo {
-    pub conn_id: u64,
     pub device_id: String,
+    pub name: String,
     pub fw: String,
-    pub authed: bool,
+    pub online: bool,
 }
 
 struct Client {
@@ -43,6 +43,7 @@ pub struct ServerState {
     pub config: Mutex<Option<Value>>,
     rev: AtomicU64,
     clients: Mutex<HashMap<u64, Client>>,
+    pending_pairs: Mutex<HashMap<String, oneshot::Sender<PairDecision>>>,
     next_id: AtomicU64,
     app: AppHandle,
 }
@@ -53,6 +54,7 @@ impl ServerState {
             config: Mutex::new(None),
             rev: AtomicU64::new(0),
             clients: Mutex::new(HashMap::new()),
+            pending_pairs: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             app,
         }
@@ -60,6 +62,13 @@ impl ServerState {
 }
 
 pub type SharedState = Arc<ServerState>;
+
+// Outcome of a pairing prompt, delivered from a confirm/reject command to the
+// socket task that is blocked waiting inside run_pairing().
+pub enum PairDecision {
+    Approve(String), // the minted token
+    Reject,
+}
 
 #[derive(Deserialize)]
 #[serde(tag = "t")]
@@ -82,6 +91,12 @@ enum InMsg {
     },
     #[serde(rename = "exec")]
     Exec { id: u64, step: Value },
+    #[serde(rename = "pair_request")]
+    PairRequest {
+        #[allow(dead_code)]
+        device_id: String,
+        code: String,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -129,15 +144,24 @@ async fn handle_socket(socket: WebSocket, state: SharedState) {
     let (device_id, fw) = match hello {
         Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str::<InMsg>(&text) {
             Ok(InMsg::Hello { device_id, fw, token }) => {
-                let expected = expected_token(&state).await;
-                if expected.is_empty() || token != expected {
-                    let _ = tx.send(auth_fail("bad token"));
-                    let _ = tx.send(Message::Close(None));
-                    drop(tx);
-                    let _ = pump.await;
-                    return;
+                let paired = {
+                    let cfg = state.config.lock().await;
+                    cfg.as_ref()
+                        .and_then(|c| crate::pairing::find_paired_token(c, &device_id))
+                };
+                if paired.as_deref() == Some(token.as_str()) {
+                    (device_id, fw) // already paired: token matches the registry
+                } else {
+                    // Unknown device or stale/empty token: run the pairing prompt.
+                    match run_pairing(&state, &tx, &mut receiver, &device_id).await {
+                        true => (device_id, fw),
+                        false => {
+                            drop(tx);
+                            let _ = pump.await;
+                            return;
+                        }
+                    }
                 }
-                (device_id, fw)
             }
             _ => {
                 let _ = tx.send(auth_fail("expected hello"));
@@ -211,7 +235,7 @@ async fn handle_socket(socket: WebSocket, state: SharedState) {
                     let _ = tx2.send(Message::Text(msg));
                 });
             }
-            Ok(InMsg::Hello { .. }) | Ok(InMsg::Unknown) | Err(_) => {}
+            Ok(InMsg::Hello { .. }) | Ok(InMsg::PairRequest { .. }) | Ok(InMsg::Unknown) | Err(_) => {}
         }
     }
 
@@ -225,17 +249,90 @@ fn auth_fail(reason: &str) -> Message {
     Message::Text(json!({"t": "auth_fail", "reason": reason}).to_string())
 }
 
-async fn expected_token(state: &SharedState) -> String {
-    state
-        .config
-        .lock()
-        .await
-        .as_ref()
-        .and_then(|c| c.get("agent"))
-        .and_then(|a| a.get("token"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("")
-        .to_string()
+// Runs the code-confirm pairing handshake on an unauthenticated socket.
+// Returns true once the operator approved (token already sent via `paired`),
+// false if rejected or the device disconnected.
+async fn run_pairing(
+    state: &SharedState,
+    tx: &mpsc::UnboundedSender<Message>,
+    receiver: &mut futures_util::stream::SplitStream<WebSocket>,
+    device_id: &str,
+) -> bool {
+    let _ = tx.send(Message::Text(json!({"t": "pair_required"}).to_string()));
+
+    // Wait for the device to send its on-screen code.
+    let code = loop {
+        match receiver.next().await {
+            Some(Ok(Message::Text(text))) => {
+                if let Ok(InMsg::PairRequest { code, .. }) = serde_json::from_str::<InMsg>(&text) {
+                    break code;
+                }
+            }
+            Some(Ok(_)) => {} // ignore non-text frames while unpaired
+            _ => return false, // socket closed / error
+        }
+    };
+
+    let (otx, mut orx) = oneshot::channel::<PairDecision>();
+    state.pending_pairs.lock().await.insert(device_id.to_string(), otx);
+    let _ = state
+        .app
+        .emit("deck-pair-request", json!({"device_id": device_id, "code": code}));
+
+    // Wait for the operator's decision, or the device disconnecting.
+    let decision = loop {
+        tokio::select! {
+            d = &mut orx => break d.ok(),
+            msg = receiver.next() => match msg {
+                Some(Ok(_)) => continue, // stray frame: keep waiting
+                _ => break None,         // disconnect
+            }
+        }
+    };
+    state.pending_pairs.lock().await.remove(device_id);
+
+    match decision {
+        Some(PairDecision::Approve(token)) => {
+            let _ = tx.send(Message::Text(json!({"t": "paired", "token": token}).to_string()));
+            true
+        }
+        _ => {
+            let _ = state
+                .app
+                .emit("deck-pair-cancel", json!({"device_id": device_id}));
+            let _ = tx.send(Message::Text(json!({"t": "pair_rejected"}).to_string()));
+            let _ = tx.send(Message::Close(None));
+            false
+        }
+    }
+}
+
+// Resolves a pending pairing prompt (called by the confirm/reject commands).
+pub async fn resolve_pair(state: &SharedState, device_id: &str, decision: PairDecision) {
+    if let Some(tx) = state.pending_pairs.lock().await.remove(device_id) {
+        let _ = tx.send(decision);
+    }
+}
+
+// Closes every live socket for `device_id` (called when forgetting a device).
+pub async fn disconnect_device(state: &SharedState, device_id: &str) {
+    let to_close: Vec<u64> = {
+        let clients = state.clients.lock().await;
+        clients
+            .iter()
+            .filter(|(_, c)| c.device_id == device_id)
+            .map(|(id, _)| *id)
+            .collect()
+    };
+    {
+        let mut clients = state.clients.lock().await;
+        for id in &to_close {
+            if let Some(c) = clients.remove(id) {
+                let _ = c.tx.send(Message::Close(None));
+            }
+        }
+    }
+    emit_devices(state).await;
 }
 
 // Sends icon_begin/binary/icon_end for every icon `config` references that
@@ -264,24 +361,37 @@ fn push_missing_icons(
 async fn push_config_to(tx: &mpsc::UnboundedSender<Message>, state: &SharedState) {
     let cfg = state.config.lock().await.clone();
     if let Some(cfg) = cfg {
+        let cfg = crate::pairing::strip_agent(&cfg);
         let rev = state.rev.load(Ordering::SeqCst);
         let _ = tx.send(Message::Text(json!({"t": "config", "config": cfg, "rev": rev}).to_string()));
     }
 }
 
-async fn emit_devices(state: &SharedState) {
-    let devices: Vec<DeviceInfo> = state
-        .clients
-        .lock()
-        .await
-        .iter()
-        .map(|(id, c)| DeviceInfo {
-            conn_id: *id,
-            device_id: c.device_id.clone(),
-            fw: c.fw.clone(),
-            authed: true,
+async fn build_device_list(state: &SharedState) -> Vec<DeviceInfo> {
+    let registry = {
+        let cfg = state.config.lock().await;
+        cfg.as_ref().map(|c| crate::pairing::paired_devices(c)).unwrap_or_default()
+    };
+    let online: HashMap<String, String> = {
+        let clients = state.clients.lock().await;
+        clients.values().map(|c| (c.device_id.clone(), c.fw.clone())).collect()
+    };
+    registry
+        .into_iter()
+        .map(|(device_id, name)| {
+            let fw = online.get(&device_id).cloned();
+            DeviceInfo {
+                online: fw.is_some(),
+                fw: fw.unwrap_or_default(),
+                name,
+                device_id,
+            }
         })
-        .collect();
+        .collect()
+}
+
+async fn emit_devices(state: &SharedState) {
+    let devices = build_device_list(state).await;
     let _ = state.app.emit("deck-devices", devices);
 }
 
@@ -289,27 +399,17 @@ async fn emit_devices(state: &SharedState) {
 // changes; bumps rev and pushes the new config to every connected device.
 pub async fn broadcast_config(state: &SharedState, config: Value) {
     *state.config.lock().await = Some(config.clone());
+    let wire = crate::pairing::strip_agent(&config);
     let rev = state.rev.fetch_add(1, Ordering::SeqCst) + 1;
-    let msg = json!({"t": "config", "config": config, "rev": rev}).to_string();
+    let msg = json!({"t": "config", "config": wire, "rev": rev}).to_string();
     let clients = state.clients.lock().await;
     for c in clients.values() {
         let _ = c.tx.send(Message::Text(msg.clone()));
-        push_missing_icons(&state.app, &c.tx, &c.known_icons, &config);
+        push_missing_icons(&state.app, &c.tx, &c.known_icons, &wire);
     }
 }
 
 #[tauri::command]
 pub async fn list_devices(state: tauri::State<'_, SharedState>) -> Result<Vec<DeviceInfo>, String> {
-    Ok(state
-        .clients
-        .lock()
-        .await
-        .iter()
-        .map(|(id, c)| DeviceInfo {
-            conn_id: *id,
-            device_id: c.device_id.clone(),
-            fw: c.fw.clone(),
-            authed: true,
-        })
-        .collect())
+    Ok(build_device_list(&state).await)
 }
