@@ -77,10 +77,32 @@ void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 /*Read the touchpad*/
 void my_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
+  // Latches a wake tap so the whole press-hold-release is hidden from LVGL.
+  // The finger is still down for many read cycles after the backlight comes
+  // back, so swallowing only the first frame would let the rest of the press
+  // click through.
+  static bool swallow_until_release = false;
+
   touch_data_t touch_data;
   bsp_touch_read();
+  bool pressed = bsp_touch_get_coordinates(&touch_data);
 
-  if (bsp_touch_get_coordinates(&touch_data)) {
+  // First tap after auto-dim only wakes the screen; don't deliver it as a
+  // click. Wake immediately, then keep reporting "released" until the finger
+  // lifts so no widget under the tap is activated.
+  if (pressed && display_power::is_dimmed()) {
+    display_power::wake();
+    swallow_until_release = true;
+  }
+  if (swallow_until_release) {
+    if (!pressed) {
+      swallow_until_release = false;
+    }
+    data->state = LV_INDEV_STATE_REL;
+    return;
+  }
+
+  if (pressed) {
     data->state = LV_INDEV_STATE_PR;
     /*Set the coordinates*/
     data->point.x = touch_data.coords[0].x;

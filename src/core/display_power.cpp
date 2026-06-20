@@ -68,4 +68,21 @@ uint16_t dim_timeout()
   return s_settings.dim_timeout;
 }
 
+bool is_dimmed()
+{
+  return s_dimmed;
+}
+
+void wake()
+{
+  if (s_dimmed) {
+    hal_display_set_brightness(s_settings.brightness);
+    s_dimmed = false;
+  }
+  // The wake tap is swallowed by the touch callback, so LVGL never sees a
+  // press to reset its idle timer; do it here or check_idle_cb would re-dim
+  // on its next poll.
+  lv_display_trigger_activity(lv_display_get_default());
+}
+
 } // namespace display_power

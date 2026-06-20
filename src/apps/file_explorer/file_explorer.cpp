@@ -140,7 +140,7 @@ static void list_entry_cb(const char *name, bool is_dir, size_t size, void *user
 
   lv_obj_t *row = lv_obj_create(parent);
   lv_obj_set_size(row, 300, 36);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLL_WITH_ARROW);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(row, styles::bg_card(), 0);
   lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(row, 4, 0);
@@ -182,13 +182,23 @@ static void list_entry_cb(const char *name, bool is_dir, size_t size, void *user
   }
 
   if (show_trash) {
-    lv_obj_t *trash = lv_label_create(row);
-    lv_obj_set_pos(trash, 264, 9);
-    lv_obj_set_width(trash, 24);
-    lv_obj_set_style_text_color(trash, styles::accent_red(), 0);
-    lv_label_set_text(trash, LV_SYMBOL_TRASH);
+    // Hit zone spans the row's full height (not just the glyph's own
+    // content-fit bounds) so touches near the icon don't fall through to
+    // the row's own click handler.
+    lv_obj_t *trash = lv_obj_create(row);
+    lv_obj_set_pos(trash, 250, 0);
+    lv_obj_set_size(trash, 50, 36);
+    lv_obj_set_style_bg_opa(trash, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(trash, 0, 0);
+    lv_obj_set_style_pad_all(trash, 0, 0);
+    lv_obj_remove_flag(trash, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(trash, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(trash, trash_click_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *trash_icon = lv_label_create(trash);
+    lv_obj_set_style_text_color(trash_icon, styles::accent_red(), 0);
+    lv_label_set_text(trash_icon, LV_SYMBOL_TRASH);
+    lv_obj_center(trash_icon);
   }
 }
 
