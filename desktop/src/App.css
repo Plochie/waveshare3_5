@@ -403,3 +403,65 @@ label {
 .step-card-fields label {
   margin-bottom: 0.5em;
 }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: #1e1e24;
+  border: 1px solid #34343c;
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 320px;
+  color: #e6e6ea;
+}
+.pair-modal h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+.pair-device-id {
+  font-family: monospace;
+  color: #9a9aa6;
+  margin: 0 0 12px;
+}
+.pair-instructions {
+  margin: 0 0 12px;
+  color: #c4c4ce;
+}
+.pair-code {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-align: center;
+  padding: 12px;
+  background: #14141a;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.pair-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.pair-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.pair-actions .confirm {
+  background: #3ecf8e;
+  color: #08130d;
+  font-weight: 600;
+}
+.pair-actions .reject {
+  background: transparent;
+  color: #d66;
+  border: 1px solid #d66;
+}

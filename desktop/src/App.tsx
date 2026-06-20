@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { configPath as fetchConfigPath, loadConfig, saveConfig } from "./api";
 import "./App.css";
@@ -5,6 +6,7 @@ import ButtonEditor from "./components/ButtonEditor";
 import DevicesPanel from "./components/DevicesPanel";
 import GridView from "./components/GridView";
 import PageTabs from "./components/PageTabs";
+import PairModal, { PendingPair } from "./components/PairModal";
 import TopBar from "./components/TopBar";
 import { DeckConfig, DeckPage } from "./types";
 
@@ -21,10 +23,22 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [path, setPath] = useState("");
+  const [pending, setPending] = useState<PendingPair | null>(null);
 
   useEffect(() => {
     loadConfig().then(setConfig);
     fetchConfigPath().then(setPath);
+  }, []);
+
+  useEffect(() => {
+    const unReq = listen<PendingPair>("deck-pair-request", (e) => setPending(e.payload));
+    const unCancel = listen<{ device_id: string }>("deck-pair-cancel", (e) =>
+      setPending((p) => (p && p.device_id === e.payload.device_id ? null : p)),
+    );
+    return () => {
+      unReq.then((f) => f());
+      unCancel.then((f) => f());
+    };
   }, []);
 
   if (!config) {
@@ -108,6 +122,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {pending && <PairModal pending={pending} onDone={() => setPending(null)} />}
       <TopBar
         config={cfg}
         onChange={update}
