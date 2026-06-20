@@ -20,11 +20,11 @@ pub fn advertise(port: u16) {
         "_deckhost._tcp.local.",
         "deck-configurator",
         "deck-configurator.local.",
-        "", // empty = let mdns-sd enumerate local interface IPs
+        "", // no fixed IP: enable_addr_auto() below fills these from local interfaces
         port,
         Some(properties),
     ) {
-        Ok(info) => info,
+        Ok(info) => info.enable_addr_auto(),
         Err(e) => {
             eprintln!("mDNS service info failed: {e}");
             return;
