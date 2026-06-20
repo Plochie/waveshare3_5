@@ -1,6 +1,7 @@
 mod host_actions;
 mod icons;
 mod mdns;
+mod pairing;
 mod ws_server;
 
 use std::fs;
