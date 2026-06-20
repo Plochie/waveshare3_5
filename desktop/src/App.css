@@ -465,3 +465,24 @@ label {
   color: #d66;
   border: 1px solid #d66;
 }
+.device-dot.online {
+  background: #3ecf8e;
+}
+.device-dot.offline {
+  background: transparent;
+  border: 1px solid #6a6a72;
+}
+.device-meta {
+  color: #8a8a94;
+  font-size: 0.8rem;
+  margin-left: 6px;
+}
+.forget-btn {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  background: transparent;
+  color: #d66;
+  border: 1px solid #d66;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
