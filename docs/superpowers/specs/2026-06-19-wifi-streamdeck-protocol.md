@@ -106,16 +106,34 @@ Step `type` registry (v1): `http_request`, `ha_service`, `ha_webhook`,
 - **Encoding:** text frames carry JSON messages (below). Binary frames carry
   icon payloads (§3.3). Every message object has a `"t"` (type) field.
 
-### 3.1 Handshake / auth
+### 3.1 Handshake / auth & pairing
 ```jsonc
-// device → app, first message after connect
-{ "t": "hello", "device_id": "esp32-aabbcc", "fw": "1.0.0", "token": "ABC12345" }
-// app → device
-{ "t": "auth_ok" }                     // token matched
-{ "t": "auth_fail", "reason": "bad token" }   // app then closes the socket
+// device → app, first message after connect (token from /deck/pairing.json, "" if unpaired)
+{ "t": "hello", "device_id": "esp32-aabbcc", "fw": "1.0.0", "token": "" }
+
+// app → device — token matched a registry entry
+{ "t": "auth_ok" }
+
+// app → device — no registry match: device must pair
+{ "t": "pair_required" }
+
+// device → app — device shows a 6-digit code on its screen, sends it up
+{ "t": "pair_request", "device_id": "esp32-aabbcc", "code": "482917" }
+
+// app → device — operator confirmed; app mints + stores a per-device token
+{ "t": "paired", "token": "<32-char hex secret>" }
+
+// app → device — operator rejected; app then closes the socket
+{ "t": "pair_rejected" }
 ```
-No other message is honored before `auth_ok`. `run_command`/`launch_app` `exec`
-requests are rejected by the app if the connection is unauthenticated.
+Per-device pairing: the desktop holds a registry `agent.devices[]` of
+`{ device_id, name, token, paired_at }`. On `hello`, the app authenticates only
+if `device_id` is in the registry **and** the presented token matches; any other
+case yields `pair_required`. The device then generates a 6-digit code, displays
+it, and sends `pair_request`; the operator confirms the on-screen code matches
+the desktop modal before the app mints a token and replies `paired`. The
+`agent` block is never broadcast to devices (§3.2). `run_command`/`launch_app`
+`exec` requests are rejected on an unauthenticated connection.
 
 ### 3.2 Config push (app → device)
 ```jsonc
