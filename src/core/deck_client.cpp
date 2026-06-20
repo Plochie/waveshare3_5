@@ -44,13 +44,32 @@ static String make_device_id()
   return "esp32-" + tail;
 }
 
-// Reads the agent pairing token from the device's own last-synced config, so
-// reconnects always present whatever token the desktop most recently pushed.
+static constexpr const char *PAIRING_PATH = "/deck/pairing.json";
+
+// The device's own pairing token, persisted separately from the synced config
+// (which is overwritten on every push). Empty string => unpaired.
 static String load_agent_token()
 {
-  deck_config::config c;
-  if (!deck_config::load(c)) return "";
-  return c.agent_token;
+  if (!sdcard::is_mounted() || !sdcard::exists(PAIRING_PATH)) return "";
+  String json = sdcard::read_string(PAIRING_PATH);
+  JsonDocument doc;
+  if (deserializeJson(doc, json)) return "";
+  return (const char *)(doc["token"] | "");
+}
+
+static void save_pairing(const String &device_id, const String &token)
+{
+  sdcard::mkdir("/deck"); // no-op if it already exists
+  JsonDocument doc;
+  doc["device_id"] = device_id;
+  doc["token"] = token;
+  String out;
+  serializeJson(doc, out);
+  if (sdcard::write(PAIRING_PATH, out.c_str())) {
+    LOG_I("deck_client", "pairing token saved");
+  } else {
+    LOG_E("deck_client", "failed to write %s", PAIRING_PATH);
+  }
 }
 
 static bool discover(String &host, uint16_t &port, String &ws_path)
