@@ -20,6 +20,7 @@
 #include "core/display_power.h"
 #include "apps/eez_demo/eez_demo.h"
 #include "apps/deck/deck.h"
+#include "apps/deck/deck_pairing.h"
 
 #define DIRECT_RENDER_MODE // Uncomment to enable full frame buffer
 
@@ -207,6 +208,18 @@ void loop()
   // Deck app is closed still invalidates its cache for next time it's opened.
   if (deck_client::consume_config_pushed() || deck_client::consume_icons_pushed()) {
     deck_invalidate_config();
+  }
+
+  // Surface the pairing screen the moment the device needs to pair, over
+  // whatever app is open. The screen pops itself once pairing resolves (which
+  // resets state to PAIR_IDLE via deck_client::clear_pairing()).
+  static bool s_pair_open = false;
+  deck_client::pairing_status ps = deck_client::pairing_state();
+  if (ps.state == deck_client::PAIR_PENDING && !s_pair_open) {
+    screen_manager::push(deck_pairing_create());
+    s_pair_open = true;
+  } else if (ps.state == deck_client::PAIR_IDLE && s_pair_open) {
+    s_pair_open = false;
   }
   delay(5);
 }
