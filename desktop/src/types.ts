@@ -76,10 +76,17 @@ export interface DeckPage {
   buttons: DeckButton[];
 }
 
+export interface PairedDevice {
+  device_id: string;
+  name: string;
+  token: string;
+  paired_at: number;
+}
+
 export interface DeckConfig {
   version: number;
   grid: { cols: number; rows: number };
-  agent?: { token: string };
+  agent?: { devices: PairedDevice[] };
   ha?: { base_url: string; token: string };
   pages: DeckPage[];
 }
@@ -113,7 +120,7 @@ export function emptyConfig(): DeckConfig {
   return {
     version: 1,
     grid: { cols: 3, rows: 4 },
-    agent: { token: "" },
+    agent: { devices: [] },
     ha: { base_url: "", token: "" },
     pages: [{ id: "home", title: "Home", buttons: [] }],
   };

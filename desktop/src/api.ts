@@ -2,10 +2,22 @@ import { invoke } from "@tauri-apps/api/core";
 import { DeckConfig, emptyConfig } from "./types";
 
 export interface DeviceInfo {
-  conn_id: number;
   device_id: string;
+  name: string;
   fw: string;
-  authed: boolean;
+  online: boolean;
+}
+
+export async function confirmPairing(deviceId: string, name: string): Promise<void> {
+  await invoke("confirm_pairing", { deviceId, name });
+}
+
+export async function rejectPairing(deviceId: string): Promise<void> {
+  await invoke("reject_pairing", { deviceId });
+}
+
+export async function forgetDevice(deviceId: string): Promise<void> {
+  await invoke("forget_device", { deviceId });
 }
 
 // Wraps the Rust-side commands in src-tauri/src/lib.rs. The config lives at a
