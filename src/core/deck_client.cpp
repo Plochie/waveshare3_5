@@ -4,6 +4,7 @@
 #include <ESPmDNS.h>
 #include <WebSocketsClient.h>
 #include <WiFi.h>
+#include <esp_system.h>
 
 #include "core/deck_config.h"
 #include "core/deck_icons.h"
@@ -28,6 +29,55 @@ static SemaphoreHandle_t s_exec_sem = nullptr;
 static volatile uint32_t s_pending_exec_id = 0;
 static volatile bool s_pending_ok = false;
 static char s_pending_err[64] = {0};
+
+// Forward declaration: defined further down (pairing token persistence), used
+// by handle_paired() below.
+static void save_pairing(const String &device_id, const String &token);
+
+// Pairing handshake state (see pairing_state()/handle_pair_*).
+static volatile pairing_state_t s_pair_state = PAIR_IDLE;
+static char s_pair_code[7] = {0};
+
+static void gen_pair_code()
+{
+  uint32_t r = esp_random() % 1000000u;
+  snprintf(s_pair_code, sizeof(s_pair_code), "%06u", (unsigned)r);
+}
+
+static void send_pair_request()
+{
+  JsonDocument doc;
+  doc["t"] = "pair_request";
+  doc["device_id"] = s_device_id;
+  doc["code"] = s_pair_code;
+  String out;
+  serializeJson(doc, out);
+  s_ws.sendTXT(out);
+}
+
+static void handle_pair_required()
+{
+  gen_pair_code();
+  s_pair_state = PAIR_PENDING;
+  LOG_I("deck_client", "pairing required, code %s", s_pair_code);
+  send_pair_request();
+}
+
+static void handle_paired(JsonDocument &doc)
+{
+  String token = (const char *)(doc["token"] | "");
+  if (token.isEmpty()) return;
+  save_pairing(s_device_id, token);
+  s_authed = true;
+  s_pair_state = PAIR_SUCCESS;
+  LOG_I("deck_client", "paired");
+}
+
+static void handle_pair_rejected()
+{
+  s_pair_state = PAIR_REJECTED;
+  LOG_W("deck_client", "pairing rejected by desktop");
+}
 
 static void set_pending_err(const char *msg)
 {
@@ -203,6 +253,12 @@ static void handle_message(const uint8_t *payload, size_t len)
     handle_icon_end(doc);
   } else if (!strcmp(t, "result")) {
     handle_result(doc);
+  } else if (!strcmp(t, "pair_required")) {
+    handle_pair_required();
+  } else if (!strcmp(t, "paired")) {
+    handle_paired(doc);
+  } else if (!strcmp(t, "pair_rejected")) {
+    handle_pair_rejected();
   }
   // state: Phase 4 — ignored for forward-compat (per protocol §5).
 }
@@ -212,6 +268,7 @@ static void on_event(WStype_t type, uint8_t *payload, size_t length)
   switch (type) {
     case WStype_CONNECTED:
       s_authed = false;
+      s_pair_state = PAIR_IDLE;
       LOG_I("deck_client", "connected to agent, sending hello");
       send_hello();
       break;
@@ -224,6 +281,7 @@ static void on_event(WStype_t type, uint8_t *payload, size_t length)
         set_pending_err("disconnected");
         xSemaphoreGive(s_exec_sem);
       }
+      if (s_pair_state == PAIR_PENDING) s_pair_state = PAIR_IDLE; // pop the pairing screen
       break;
     case WStype_TEXT:
       handle_message(payload, length);
@@ -323,6 +381,20 @@ bool exec_host_step(const String &step_json, uint32_t timeout_ms, String &err)
     err = s_pending_err[0] ? s_pending_err : "step failed";
   }
   return s_pending_ok;
+}
+
+pairing_status pairing_state()
+{
+  pairing_status s;
+  s.state = s_pair_state;
+  strncpy(s.code, s_pair_code, sizeof(s.code) - 1);
+  s.code[sizeof(s.code) - 1] = '\0';
+  return s;
+}
+
+void clear_pairing()
+{
+  s_pair_state = PAIR_IDLE;
 }
 
 } // namespace deck_client

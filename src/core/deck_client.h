@@ -35,4 +35,20 @@ bool consume_icons_pushed();
 // failure reason ("not connected", "timeout", or the agent's error string).
 bool exec_host_step(const String &step_json, uint32_t timeout_ms, String &err);
 
+// Pairing handshake state, polled from the LVGL thread to drive the on-device
+// pairing screen (see apps/deck/deck_pairing). `code` is the 6-digit code shown
+// on the device and sent to the desktop for visual confirmation.
+enum pairing_state_t { PAIR_IDLE = 0, PAIR_PENDING, PAIR_SUCCESS, PAIR_REJECTED };
+
+struct pairing_status {
+  pairing_state_t state;
+  char code[7];
+};
+
+pairing_status pairing_state();
+
+// Resets pairing state to PAIR_IDLE. Called by the pairing screen once it has
+// shown the success/rejected result and is about to pop itself.
+void clear_pairing();
+
 } // namespace deck_client
