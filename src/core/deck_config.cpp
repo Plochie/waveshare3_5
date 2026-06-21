@@ -104,6 +104,19 @@ bool parse(const String &json, config &out)
       btn.icon = (const char *)(b["icon"] | "");
       btn.color = (const char *)(b["color"] | "");
       btn.open_page = (const char *)(b["open_page"] | "");
+      JsonObjectConst bd = b["bind"];
+      if (!bd.isNull()) {
+        btn.bind.present = true;
+        btn.bind.key = (const char *)(bd["key"] | "");
+        btn.bind.mode = (const char *)(bd["mode"] | "toggle");
+        btn.bind.on_value = (const char *)(bd["on_value"] | "1");
+        btn.bind.off_value = (const char *)(bd["off_value"] | "0");
+        btn.bind.on_label = (const char *)(bd["on_label"] | "");
+        btn.bind.off_label = (const char *)(bd["off_label"] | "");
+        btn.bind.on_color = (const char *)(bd["on_color"] | "");
+        btn.bind.off_color = (const char *)(bd["off_color"] | "");
+        btn.bind.format = (const char *)(bd["format"] | "");
+      }
       for (JsonObjectConst s : b["steps"].as<JsonArrayConst>()) {
         step st;
         parse_step(s, st);

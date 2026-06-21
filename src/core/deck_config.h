@@ -54,12 +54,26 @@ struct step {
   uint32_t delay_ms = 0;
 };
 
+struct bind_t {
+  bool present = false;
+  String key;
+  String mode = "toggle";   // "toggle" | "text"
+  String on_value = "1";
+  String off_value = "0";
+  String on_label;
+  String off_label;
+  String on_color;
+  String off_color;
+  String format;
+};
+
 struct button {
   int pos = -1;
   String label;
   String icon;       // filename under /deck/icons/, or empty
   String color;      // "#RRGGBB" or empty
   String open_page;  // folder target page id, or empty
+  bind_t bind;       // live-value binding (present=false if absent)
   std::vector<step> steps;
 };
 
