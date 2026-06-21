@@ -211,6 +211,9 @@ void loop()
   if (deck_client::consume_config_pushed() || deck_client::consume_icons_pushed()) {
     deck_invalidate_config();
   }
+  if (deck_state::consume_changed()) {
+    deck_refresh_bindings();
+  }
 
   // Surface the pairing screen the moment the device needs to pair, over
   // whatever app is open. The screen pops itself once pairing resolves (which

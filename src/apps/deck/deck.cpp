@@ -6,6 +6,7 @@
 #include "core/deck_config.h"
 #include "core/deck_executor.h"
 #include "core/deck_icons.h"
+#include "core/deck_state.h"
 #include "core/screen_manager.h"
 #include "ui/styles.h"
 
@@ -118,6 +119,11 @@ static void tile_click_cb(lv_event_t *e)
   if (btn.open_page.length()) {
     s_page_stack.push_back(btn.open_page);
     rebuild_grid();
+  } else if (btn.bind.present && btn.bind.mode == "toggle" && btn.bind.key.length()) {
+    String cur = deck_state::get(btn.bind.key);
+    bool on = (cur == btn.bind.on_value);
+    deck_state::set_and_send(btn.bind.key, on ? btn.bind.off_value : btn.bind.on_value);
+    rebuild_grid(); // optimistic: reflect the flip immediately
   } else {
     deck_executor::run(s_cfg, btn);
   }
@@ -134,6 +140,31 @@ static void back_click_cb(lv_event_t *e)
   }
 }
 
+// Computes a tile's display label and background color, applying any live-value
+// binding. For an unbound button (or a bound key with no value yet) it returns
+// the static label and the static color.
+static String tile_label_and_color(const deck_config::button &btn, lv_color_t &out_color)
+{
+  out_color = tile_color(btn.color);
+  if (!btn.bind.present || btn.bind.key.isEmpty()) return btn.label;
+
+  String val = deck_state::get(btn.bind.key);
+  if (btn.bind.mode == "text") {
+    if (val.isEmpty()) return btn.label;
+    if (btn.bind.format.isEmpty()) return val;
+    String s = btn.bind.format;
+    s.replace("{}", val);
+    return s;
+  }
+
+  // toggle
+  bool on = (val == btn.bind.on_value);
+  if (on && btn.bind.on_color.length()) out_color = tile_color(btn.bind.on_color);
+  else if (!on && btn.bind.off_color.length()) out_color = tile_color(btn.bind.off_color);
+  String lbl = on ? btn.bind.on_label : btn.bind.off_label;
+  return lbl.length() ? lbl : btn.label;
+}
+
 static void make_tile(lv_obj_t *parent, const deck_config::button &btn, int idx,
                       int w, int h)
 {
@@ -141,7 +172,9 @@ static void make_tile(lv_obj_t *parent, const deck_config::button &btn, int idx,
   lv_obj_set_size(tile, w, h);
   lv_obj_remove_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_radius(tile, 10, 0);
-  lv_obj_set_style_bg_color(tile, tile_color(btn.color), 0);
+  lv_color_t tile_bg;
+  String tile_text = tile_label_and_color(btn, tile_bg);
+  lv_obj_set_style_bg_color(tile, tile_bg, 0);
   lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
   lv_obj_set_style_border_color(tile, styles::border(), 0);
   lv_obj_set_style_border_width(tile, 1, 0);
@@ -153,7 +186,7 @@ static void make_tile(lv_obj_t *parent, const deck_config::button &btn, int idx,
   lv_obj_t *icon = make_icon(tile, btn, icon_size);
 
   lv_obj_t *label = lv_label_create(tile);
-  lv_label_set_text(label, btn.label.c_str());
+  lv_label_set_text(label, tile_text.c_str());
   lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(label, w - 12);
   lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
@@ -291,4 +324,9 @@ void deck_invalidate_config()
     // visible without requiring the user to leave and reopen the app.
     load_and_show();
   }
+}
+
+void deck_refresh_bindings()
+{
+  if (s_root) rebuild_grid();
 }

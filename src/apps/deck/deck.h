@@ -12,3 +12,8 @@ lv_obj_t *deck_create();
 // Call from the LVGL thread only (e.g. main.cpp's loop(), after observing
 // deck_client::consume_config_pushed()) — never from a background task.
 void deck_invalidate_config();
+
+// Re-renders the current grid so tiles bound to live values reflect the latest
+// deck_state cache. Cheap (no SD reload). Call from the LVGL thread (main loop)
+// after observing deck_state::consume_changed(). No-op if the screen is closed.
+void deck_refresh_bindings();
