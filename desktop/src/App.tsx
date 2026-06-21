@@ -16,6 +16,7 @@ import GridView from "./components/GridView";
 import Onboarding from "./components/Onboarding";
 import PageTabs from "./components/PageTabs";
 import { PendingPair } from "./components/PairPanel";
+import StatePage from "./components/StatePage";
 import TopBar from "./components/TopBar";
 import { DeckConfig, DeckPage } from "./types";
 
@@ -34,7 +35,7 @@ export default function App() {
   const [path, setPath] = useState("");
   const [pending, setPending] = useState<PendingPair | null>(null);
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [view, setView] = useState<"editor" | "devices">("editor");
+  const [view, setView] = useState<"editor" | "devices" | "state">("editor");
   const [onboarding, setOnboarding] = useState(false);
   const bootstrapped = useRef(false);
 
@@ -237,13 +238,15 @@ export default function App() {
             </div>
           </div>
         </>
-      ) : (
+      ) : view === "devices" ? (
         <DevicesPage
           devices={devices}
           onForget={handleForget}
           pending={pending}
           onResolved={() => setPending(null)}
         />
+      ) : (
+        <StatePage />
       )}
     </div>
   );

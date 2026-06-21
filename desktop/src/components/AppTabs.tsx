@@ -1,6 +1,8 @@
+type View = "editor" | "devices" | "state";
+
 interface Props {
-  view: "editor" | "devices";
-  onSelect: (v: "editor" | "devices") => void;
+  view: View;
+  onSelect: (v: View) => void;
   pendingBadge: boolean;
 }
 
@@ -21,6 +23,13 @@ export default function AppTabs({ view, onSelect, pendingBadge }: Props) {
       >
         Devices
         {pendingBadge && <span className="app-tab-badge" />}
+      </button>
+      <button
+        type="button"
+        className={`app-tab ${view === "state" ? "active" : ""}`}
+        onClick={() => onSelect("state")}
+      >
+        State
       </button>
     </div>
   );
