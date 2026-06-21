@@ -482,3 +482,128 @@ label {
   border-radius: 4px;
   padding: 1px 6px;
 }
+
+/* PairPanel (shared device area) */
+.pp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 24px;
+}
+.pp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #1d1d23;
+  border: 1px solid #2c2c34;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  color: #c4c4ce;
+}
+.pp-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #3ecf8e;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: pp-spin 0.9s linear infinite;
+}
+@keyframes pp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pp-hint {
+  font-size: 0.78rem;
+  color: #7a7a86;
+  margin-top: 12px;
+  max-width: 230px;
+}
+.pp-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pp-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.pp-id {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+  color: #9a9aa6;
+  background: #23232b;
+  border: 1px solid #2c2c34;
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-top: 8px;
+}
+.pp-code {
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #fff;
+  margin: 14px 0 0;
+}
+.pp-instr {
+  font-size: 0.78rem;
+  color: #9a9aa6;
+  margin: 10px 0 0;
+  max-width: 230px;
+}
+.pp-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #9a9aa6;
+  margin-top: 14px;
+  width: 200px;
+  text-align: left;
+}
+.pp-name input {
+  background: #15151a;
+  border: 1px solid #2c2c34;
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: #e6e6ea;
+  font-size: 0.8rem;
+}
+.pp-error {
+  color: #f87171;
+  font-size: 0.78rem;
+  margin: 10px 0 0;
+}
+.pp-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.pp-actions button {
+  border-radius: 7px;
+  padding: 8px 18px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid;
+  cursor: pointer;
+}
+.pp-pair {
+  background: #3ecf8e;
+  color: #08130d;
+  border-color: #3ecf8e;
+}
+.pp-reject {
+  background: transparent;
+  color: #d66;
+  border-color: #d66;
+}
+.pp-success {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #3ecf8e;
+}
