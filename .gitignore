@@ -2,3 +2,6 @@
 .vscode/
 .DS_Store
 .claude/
+
+# Visual brainstorming companion
+.superpowers/
