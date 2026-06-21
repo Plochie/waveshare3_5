@@ -641,3 +641,75 @@ label {
   border-radius: 50%;
   background: #3ecf8e;
 }
+
+/* Onboarding gate */
+.onboarding {
+  display: flex;
+  height: 100vh;
+  background: #16161a;
+  color: #e6e6ea;
+}
+.ob-left {
+  width: 46%;
+  max-width: 380px;
+  padding: 48px 40px;
+  border-right: 1px solid #2c2c34;
+  display: flex;
+  flex-direction: column;
+}
+.ob-glyph {
+  width: 54px;
+  height: 40px;
+  border: 2px solid #3ecf8e;
+  border-radius: 7px;
+}
+.ob-title {
+  font-size: 1.5rem;
+  font-weight: 650;
+  margin: 20px 0 0;
+}
+.ob-subtitle {
+  font-size: 0.9rem;
+  color: #9a9aa6;
+  margin: 6px 0 0;
+}
+.ob-steps {
+  list-style: none;
+  padding: 0;
+  margin: 28px 0 0;
+}
+.ob-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #b6b6c0;
+  margin: 10px 0;
+}
+.ob-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #23232b;
+  color: #3ecf8e;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ob-skip {
+  margin-top: auto;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: #7a7a86;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.ob-right {
+  flex: 1;
+  background: #1a1a20;
+}
