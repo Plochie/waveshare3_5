@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { confirmPairing, rejectPairing } from "../api";
 
 export interface PendingPair {
@@ -17,6 +17,14 @@ export default function PairPanel({ pending, context, onResolved }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paired, setPaired] = useState(false);
+
+  // Reset the per-device inputs when the pending device changes, so a stale
+  // error or typed name from a previous request never carries over to another
+  // device's confirm card.
+  useEffect(() => {
+    setName("");
+    setError(null);
+  }, [pending?.device_id]);
 
   async function pair() {
     if (!pending) return;
