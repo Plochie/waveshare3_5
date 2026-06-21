@@ -51,4 +51,8 @@ pairing_status pairing_state();
 // shown the success/rejected result and is about to pop itself.
 void clear_pairing();
 
+// Sends {"t":"set","key":...,"value":...} (protocol §3.5) when a toggle-bound
+// tile is tapped. No-op if not connected/authed.
+void send_set(const String &key, const String &value);
+
 } // namespace deck_client

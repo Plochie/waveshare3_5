@@ -17,6 +17,7 @@
 #include "core/logging.h"
 #include "core/wifi_autoconnect.h"
 #include "core/deck_client.h"
+#include "core/deck_state.h"
 #include "core/display_power.h"
 #include "apps/eez_demo/eez_demo.h"
 #include "apps/deck/deck.h"
@@ -195,6 +196,7 @@ void setup()
     display_power::init();
     screen_manager::push(eez_demo_create());
     wifi_autoconnect::start();
+    deck_state::init();
     deck_client::start();
   }
 

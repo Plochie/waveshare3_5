@@ -8,6 +8,7 @@
 
 #include "core/deck_config.h"
 #include "core/deck_icons.h"
+#include "core/deck_state.h"
 #include "core/logging.h"
 #include "hal_sdcard.h"
 
@@ -259,8 +260,15 @@ static void handle_message(const uint8_t *payload, size_t len)
     handle_paired(doc);
   } else if (!strcmp(t, "pair_rejected")) {
     handle_pair_rejected();
+  } else if (!strcmp(t, "state_snapshot")) {
+    for (JsonPairConst kv : doc["values"].as<JsonObjectConst>()) {
+      deck_state::set_local(kv.key().c_str(), (const char *)(kv.value() | ""));
+    }
+  } else if (!strcmp(t, "state")) {
+    deck_state::set_local((const char *)(doc["key"] | ""),
+                          (const char *)(doc["value"] | ""));
   }
-  // state: Phase 4 — ignored for forward-compat (per protocol §5).
+  // Unknown `t` values are ignored for forward-compat (per protocol §5).
 }
 
 static void on_event(WStype_t type, uint8_t *payload, size_t length)
@@ -395,6 +403,18 @@ pairing_status pairing_state()
 void clear_pairing()
 {
   s_pair_state = PAIR_IDLE;
+}
+
+void send_set(const String &key, const String &value)
+{
+  if (!s_authed || !s_ws.isConnected() || key.isEmpty()) return;
+  JsonDocument doc;
+  doc["t"] = "set";
+  doc["key"] = key;
+  doc["value"] = value;
+  String out;
+  serializeJson(doc, out);
+  s_ws.sendTXT(out);
 }
 
 } // namespace deck_client
