@@ -144,44 +144,6 @@ label {
   color: #3ecf8e;
 }
 
-.devices-panel {
-  display: flex;
-  align-items: center;
-  gap: 0.8em;
-  padding: 0.4em 1em;
-  border-bottom: 1px solid #2e2e33;
-  font-size: 0.8em;
-}
-
-.devices-label {
-  color: #777;
-  text-transform: uppercase;
-  font-size: 0.75em;
-  letter-spacing: 0.05em;
-}
-
-.devices-empty {
-  color: #555;
-}
-
-.device-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  background: #26262b;
-  border: 1px solid #3a3a40;
-  border-radius: 12px;
-  padding: 0.15em 0.6em;
-}
-
-.device-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #3ecf8e;
-  display: inline-block;
-}
-
 .page-tabs {
   display: flex;
   gap: 0.5em;
@@ -393,94 +355,6 @@ label {
 
 .step-card-fields label {
   margin-bottom: 0.5em;
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-.modal {
-  background: #1e1e24;
-  border: 1px solid #34343c;
-  border-radius: 12px;
-  padding: 24px;
-  min-width: 320px;
-  color: #e6e6ea;
-}
-.pair-modal h2 {
-  margin: 0 0 8px;
-  font-size: 1.1rem;
-}
-.pair-device-id {
-  font-family: monospace;
-  color: #9a9aa6;
-  margin: 0 0 12px;
-}
-.pair-instructions {
-  margin: 0 0 12px;
-  color: #c4c4ce;
-}
-.pair-code {
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-align: center;
-  padding: 12px;
-  background: #14141a;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-.pair-name {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
-}
-.pair-error {
-  color: #f87171;
-  font-size: 0.85rem;
-  margin: 0 0 12px;
-}
-.pair-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.pair-actions .confirm {
-  background: #3ecf8e;
-  color: #08130d;
-  font-weight: 600;
-}
-.pair-actions .reject {
-  background: transparent;
-  color: #d66;
-  border: 1px solid #d66;
-}
-.device-dot.online {
-  background: #3ecf8e;
-}
-.device-dot.offline {
-  background: transparent;
-  border: 1px solid #6a6a72;
-}
-.device-meta {
-  color: #8a8a94;
-  font-size: 0.8rem;
-  margin-left: 6px;
-}
-.forget-btn {
-  margin-left: 8px;
-  font-size: 0.75rem;
-  background: transparent;
-  color: #d66;
-  border: 1px solid #d66;
-  border-radius: 4px;
-  padding: 1px 6px;
 }
 
 /* PairPanel (shared device area) */
@@ -787,5 +661,27 @@ label {
   border: 1px solid #d66;
   border-radius: 5px;
   padding: 3px 9px;
+  cursor: pointer;
+}
+
+/* Editor "a deck wants to pair" banner */
+.editor-banner {
+  background: #23231a;
+  border-bottom: 1px solid #3a3a2a;
+  color: #e8e0b0;
+  font-size: 0.82rem;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.editor-banner button {
+  background: #3ecf8e;
+  color: #08130d;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
   cursor: pointer;
 }

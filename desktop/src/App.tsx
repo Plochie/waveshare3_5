@@ -1,12 +1,21 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
-import { configPath as fetchConfigPath, loadConfig, saveConfig } from "./api";
+import { useEffect, useRef, useState } from "react";
+import {
+  configPath as fetchConfigPath,
+  DeviceInfo,
+  forgetDevice,
+  listDevices,
+  loadConfig,
+  saveConfig,
+} from "./api";
 import "./App.css";
+import AppTabs from "./components/AppTabs";
 import ButtonEditor from "./components/ButtonEditor";
-import DevicesPanel from "./components/DevicesPanel";
+import DevicesPage from "./components/DevicesPage";
 import GridView from "./components/GridView";
+import Onboarding from "./components/Onboarding";
 import PageTabs from "./components/PageTabs";
-import PairModal, { PendingPair } from "./components/PairModal";
+import { PendingPair } from "./components/PairPanel";
 import TopBar from "./components/TopBar";
 import { DeckConfig, DeckPage } from "./types";
 
@@ -24,6 +33,10 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [path, setPath] = useState("");
   const [pending, setPending] = useState<PendingPair | null>(null);
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [view, setView] = useState<"editor" | "devices">("editor");
+  const [onboarding, setOnboarding] = useState(false);
+  const bootstrapped = useRef(false);
 
   useEffect(() => {
     loadConfig().then(setConfig);
@@ -41,10 +54,55 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () =>
+      listDevices().then((list) => {
+        if (cancelled) return;
+        setDevices(list);
+        if (!bootstrapped.current) {
+          bootstrapped.current = true;
+          if (list.length === 0) setOnboarding(true);
+        }
+      });
+    poll();
+    const id = setInterval(poll, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (onboarding && devices.length > 0) {
+      setOnboarding(false);
+      setView("editor");
+    }
+  }, [onboarding, devices.length]);
+
+  async function handleForget(deviceId: string) {
+    try {
+      await forgetDevice(deviceId);
+      setDevices((ds) => ds.filter((d) => d.device_id !== deviceId));
+    } catch (e) {
+      console.error("forget failed", e);
+    }
+  }
+
   if (!config) {
     return <div className="loading">Loading…</div>;
   }
   const cfg: DeckConfig = config;
+
+  if (onboarding) {
+    return (
+      <Onboarding
+        pending={pending}
+        onResolved={() => setPending(null)}
+        onSkip={() => setOnboarding(false)}
+      />
+    );
+  }
 
   function update(next: DeckConfig) {
     setConfig(next);
@@ -122,53 +180,71 @@ export default function App() {
 
   return (
     <div className="app">
-      {pending && <PairModal pending={pending} onDone={() => setPending(null)} />}
-      <TopBar
-        config={cfg}
-        onChange={update}
-        onSave={handleSave}
-        dirty={dirty}
-        saving={saving}
-        configPath={path}
+      <AppTabs
+        view={view}
+        onSelect={setView}
+        pendingBadge={!!pending && view !== "devices"}
       />
-
-      <DevicesPanel />
-
-      <PageTabs
-        pages={cfg.pages}
-        currentPageId={currentPage.id}
-        onSelect={(id) => {
-          setCurrentPageId(id);
-          setSelectedPos(null);
-        }}
-        onAdd={handleAddPage}
-        onRename={handleRenamePage}
-        onRemove={handleRemovePage}
-      />
-
-      <div className="main-layout">
-        <GridView
-          page={currentPage}
-          cols={cfg.grid.cols}
-          rows={cfg.grid.rows}
-          selectedPos={selectedPos}
-          onSelect={handleSelectSlot}
-        />
-
-        <div className="side-panel">
-          {selectedButton ? (
-            <ButtonEditor
-              button={selectedButton}
-              pages={cfg.pages}
-              currentPageId={currentPage.id}
-              onChange={handleButtonChange}
-              onClear={handleClearSlot}
-            />
-          ) : (
-            <p className="hint">Select a tile to edit it.</p>
+      {view === "editor" ? (
+        <>
+          {pending && (
+            <div className="editor-banner">
+              A deck wants to pair —{" "}
+              <button type="button" onClick={() => setView("devices")}>
+                review in Devices
+              </button>
+            </div>
           )}
-        </div>
-      </div>
+          <TopBar
+            config={cfg}
+            onChange={update}
+            onSave={handleSave}
+            dirty={dirty}
+            saving={saving}
+            configPath={path}
+          />
+          <PageTabs
+            pages={cfg.pages}
+            currentPageId={currentPage.id}
+            onSelect={(id) => {
+              setCurrentPageId(id);
+              setSelectedPos(null);
+            }}
+            onAdd={handleAddPage}
+            onRename={handleRenamePage}
+            onRemove={handleRemovePage}
+          />
+          <div className="main-layout">
+            <GridView
+              page={currentPage}
+              cols={cfg.grid.cols}
+              rows={cfg.grid.rows}
+              selectedPos={selectedPos}
+              onSelect={handleSelectSlot}
+            />
+            <div className="side-panel">
+              {selectedButton ? (
+                <ButtonEditor
+                  button={selectedButton}
+                  pages={cfg.pages}
+                  currentPageId={currentPage.id}
+                  onChange={handleButtonChange}
+                  onClear={handleClearSlot}
+                />
+              ) : (
+                <p className="hint">Select a tile to edit it.</p>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        <DevicesPage
+          devices={devices}
+          onForget={handleForget}
+          pending={pending}
+          onResolved={() => setPending(null)}
+        />
+      )}
     </div>
   );
 }
