@@ -1,11 +1,11 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Query, State,
     },
     response::IntoResponse,
-    routing::get,
-    Router,
+    routing::{get, post},
+    Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -44,6 +44,7 @@ pub struct ServerState {
     rev: AtomicU64,
     clients: Mutex<HashMap<u64, Client>>,
     pending_pairs: Mutex<HashMap<String, oneshot::Sender<PairDecision>>>,
+    pub state: Mutex<HashMap<String, String>>,
     next_id: AtomicU64,
     app: AppHandle,
 }
@@ -55,6 +56,7 @@ impl ServerState {
             rev: AtomicU64::new(0),
             clients: Mutex::new(HashMap::new()),
             pending_pairs: Mutex::new(HashMap::new()),
+            state: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             app,
         }
@@ -97,6 +99,8 @@ enum InMsg {
         device_id: String,
         code: String,
     },
+    #[serde(rename = "set")]
+    Set { key: String, value: String },
     #[serde(other)]
     Unknown,
 }
@@ -114,7 +118,11 @@ pub async fn run(app: AppHandle, state: SharedState) {
 
     crate::mdns::advertise(port);
 
-    let router = Router::new().route("/ws", get(ws_handler)).with_state(state.clone());
+    let router = Router::new()
+        .route("/ws", get(ws_handler))
+        .route("/kv", post(kv_post))
+        .route("/kv/set", get(kv_get))
+        .with_state(state.clone());
     let _ = app; // app handle is reachable via state.app for events
     if let Err(e) = axum::serve(listener, router).await {
         eprintln!("ws_server: crashed: {e}");
@@ -190,6 +198,10 @@ async fn handle_socket(socket: WebSocket, state: SharedState) {
     let _ = tx.send(Message::Text(json!({"t": "auth_ok"}).to_string()));
     emit_devices(&state).await;
     push_config_to(&tx, &state).await;
+    {
+        let snap = build_snapshot(&*state.state.lock().await);
+        let _ = tx.send(Message::Text(snap));
+    }
 
     while let Some(Ok(msg)) = receiver.next().await {
         let Message::Text(text) = msg else { continue };
@@ -234,6 +246,11 @@ async fn handle_socket(socket: WebSocket, state: SharedState) {
                     };
                     let _ = tx2.send(Message::Text(msg));
                 });
+            }
+            Ok(InMsg::Set { key, value }) => {
+                // §3.5: device -> app on a toggle tap. Already authenticated
+                // here. Store + re-broadcast to all (including this sender).
+                set_value(&state, key, value).await;
             }
             Ok(InMsg::Hello { .. }) | Ok(InMsg::PairRequest { .. }) | Ok(InMsg::Unknown) | Err(_) => {}
         }
@@ -412,4 +429,65 @@ pub async fn broadcast_config(state: &SharedState, config: Value) {
 #[tauri::command]
 pub async fn list_devices(state: tauri::State<'_, SharedState>) -> Result<Vec<DeviceInfo>, String> {
     Ok(build_device_list(&state).await)
+}
+
+// Builds the state_snapshot message JSON from the current store.
+fn build_snapshot(map: &HashMap<String, String>) -> String {
+    let values: serde_json::Map<String, Value> = map
+        .iter()
+        .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+        .collect();
+    json!({ "t": "state_snapshot", "values": values }).to_string()
+}
+
+// The single set path: store the value, broadcast a `state` delta to every
+// connected device, and notify the desktop UI. All sources funnel through here.
+pub async fn set_value(state: &SharedState, key: String, value: String) {
+    state.state.lock().await.insert(key.clone(), value.clone());
+    let msg = json!({ "t": "state", "key": key, "value": value }).to_string();
+    {
+        let clients = state.clients.lock().await;
+        for c in clients.values() {
+            let _ = c.tx.send(Message::Text(msg.clone()));
+        }
+    }
+    let _ = state.app.emit("deck-state", json!({ "key": key, "value": value }));
+}
+
+#[derive(Deserialize)]
+struct KvParams {
+    key: String,
+    value: String,
+}
+
+async fn kv_post(State(state): State<SharedState>, Json(p): Json<KvParams>) -> impl IntoResponse {
+    set_value(&state, p.key, p.value).await;
+    "ok"
+}
+
+async fn kv_get(State(state): State<SharedState>, Query(p): Query<KvParams>) -> impl IntoResponse {
+    set_value(&state, p.key, p.value).await;
+    "ok"
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_has_type_and_values() {
+        let mut m = HashMap::new();
+        m.insert("a".to_string(), "1".to_string());
+        let s = build_snapshot(&m);
+        let v: Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(v["t"], "state_snapshot");
+        assert_eq!(v["values"]["a"], "1");
+    }
+
+    #[test]
+    fn snapshot_empty_is_object() {
+        let v: Value = serde_json::from_str(&build_snapshot(&HashMap::new())).unwrap();
+        assert!(v["values"].is_object());
+        assert_eq!(v["values"].as_object().unwrap().len(), 0);
+    }
 }

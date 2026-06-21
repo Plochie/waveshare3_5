@@ -105,6 +105,23 @@ async fn forget_device(
     Ok(())
 }
 
+#[tauri::command]
+async fn set_state(
+    state: tauri::State<'_, SharedState>,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    ws_server::set_value(&state, key, value).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn list_state(
+    state: tauri::State<'_, SharedState>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    Ok(state.state.lock().await.clone())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -130,6 +147,8 @@ pub fn run() {
             confirm_pairing,
             reject_pairing,
             forget_device,
+            set_state,
+            list_state,
             ws_server::list_devices,
             icons::import_icon,
             icons::icon_preview
