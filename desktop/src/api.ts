@@ -60,3 +60,11 @@ export async function importIcon(path: string): Promise<IconMeta> {
 export async function iconPreview(name: string): Promise<string | null> {
   return invoke<string | null>("icon_preview", { name });
 }
+
+export async function setState(key: string, value: string): Promise<void> {
+  await invoke("set_state", { key, value });
+}
+
+export async function listState(): Promise<Record<string, string>> {
+  return invoke<Record<string, string>>("list_state");
+}

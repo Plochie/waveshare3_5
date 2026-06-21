@@ -61,6 +61,18 @@ export interface Step {
   ms?: number;
 }
 
+export interface Bind {
+  key: string;
+  mode: "toggle" | "text";
+  on_value?: string;
+  off_value?: string;
+  on_label?: string;
+  off_label?: string;
+  on_color?: string;
+  off_color?: string;
+  format?: string;
+}
+
 export interface DeckButton {
   pos: number;
   label: string;
@@ -68,6 +80,7 @@ export interface DeckButton {
   color?: string;
   open_page?: string;
   steps?: Step[];
+  bind?: Bind;
 }
 
 export interface DeckPage {
