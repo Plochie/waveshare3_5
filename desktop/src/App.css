@@ -607,3 +607,37 @@ label {
   font-weight: 700;
   color: #3ecf8e;
 }
+
+/* Top-level Editor | Devices tabs */
+.app-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  background: #1d1d23;
+  border-bottom: 1px solid #2c2c34;
+}
+.app-tab {
+  position: relative;
+  font-size: 0.82rem;
+  padding: 7px 16px;
+  border-radius: 7px 7px 0 0;
+  color: #9a9aa6;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  cursor: pointer;
+}
+.app-tab.active {
+  background: #16161a;
+  color: #fff;
+  border-color: #2c2c34;
+}
+.app-tab-badge {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3ecf8e;
+}
