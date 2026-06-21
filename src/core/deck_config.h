@@ -75,7 +75,6 @@ struct config {
   int rows = 4;
   String ha_base_url;
   String ha_token;
-  String agent_token;   // pairing secret, matched against the WS hello/auth
   std::vector<page> pages;
 };
 
