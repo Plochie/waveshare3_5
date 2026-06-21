@@ -171,11 +171,23 @@ The device may advertise which icons it already has so the app skips them:
 device waits (with a timeout, ~3 s) for the matching `result` before running the
 next step in the sequence.
 
-### 3.5 Live state (Phase 4, reserved)
+### 3.5 Live state bus (key/value)
 ```jsonc
-{ "t": "state", "page": "home", "pos": 0, "value": { "on": true } }  // app → device
+// app → device, right after auth_ok + config: current store snapshot
+{ "t": "state_snapshot", "values": { "mic_muted": "1", "cpu_temp": "62" } }
+// app → device, on each value change (broadcast to every connected device)
+{ "t": "state", "key": "mic_muted", "value": "0" }
+// device → app, when a toggle-bound tile is tapped
+{ "t": "set", "key": "mic_muted", "value": "0" }
 ```
-Reserved now so v1 implementations ignore unknown `t` values forward-compatibly.
+The desktop is the authoritative hub: it holds an in-memory `key→value` store
+(values are strings). Any source (UI, the `/kv` HTTP endpoint, later host/HA
+adapters) calls a single set path that stores the value and broadcasts a `state`
+delta to all devices. A device caches values, receives a `state_snapshot` on
+connect, and renders tiles bound to a key. A toggle tile's tap sends `set`; the
+hub stores it and re-broadcasts `state` to everyone (including the sender).
+`set` is honored only on an authenticated connection. Unknown `t` values and
+unknown keys are ignored (forward-compatible).
 
 ## 4. Execution semantics
 
