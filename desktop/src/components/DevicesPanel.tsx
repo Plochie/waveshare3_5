@@ -20,8 +20,13 @@ export default function DevicesPanel() {
   }, []);
 
   async function forget(device_id: string) {
-    await forgetDevice(device_id);
-    setDevices((ds) => ds.filter((d) => d.device_id !== device_id));
+    try {
+      await forgetDevice(device_id);
+      setDevices((ds) => ds.filter((d) => d.device_id !== device_id));
+    } catch (e) {
+      console.error("forget failed", e);
+      // leave the device in the list; the next poll reflects true state
+    }
   }
 
   return (

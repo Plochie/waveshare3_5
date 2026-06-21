@@ -144,15 +144,6 @@ label {
   color: #3ecf8e;
 }
 
-.token-row {
-  display: flex;
-  gap: 0.4em;
-}
-
-.token-row input {
-  flex: 1;
-}
-
 .devices-panel {
   display: flex;
   align-items: center;
@@ -449,6 +440,11 @@ label {
   flex-direction: column;
   gap: 4px;
   margin-bottom: 16px;
+}
+.pair-error {
+  color: #f87171;
+  font-size: 0.85rem;
+  margin: 0 0 12px;
 }
 .pair-actions {
   display: flex;

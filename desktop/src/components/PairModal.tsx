@@ -14,12 +14,16 @@ interface Props {
 export default function PairModal({ pending, onDone }: Props) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function pair() {
     setBusy(true);
+    setError(null);
     try {
       await confirmPairing(pending.device_id, name.trim() || pending.device_id);
       onDone();
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
     }
@@ -27,9 +31,12 @@ export default function PairModal({ pending, onDone }: Props) {
 
   async function reject() {
     setBusy(true);
+    setError(null);
     try {
       await rejectPairing(pending.device_id);
       onDone();
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
     }
@@ -52,6 +59,7 @@ export default function PairModal({ pending, onDone }: Props) {
             onChange={(e) => setName(e.target.value)}
           />
         </label>
+        {error && <p className="pair-error">{error}</p>}
         <div className="pair-actions">
           <button type="button" className="reject" onClick={reject} disabled={busy}>
             Reject
